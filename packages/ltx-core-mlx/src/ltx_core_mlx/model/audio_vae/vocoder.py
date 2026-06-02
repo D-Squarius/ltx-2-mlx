@@ -120,24 +120,20 @@ class UpSample1d(nn.Module):
     def __call__(self, x: mx.array) -> mx.array:
         """x: (B, T, C) -> (B, T*2, C)"""
         B, T, C = x.shape
-        # Insert zeros between samples: (B, T, C) -> (B, T*2, C)
-        x_up = mx.zeros((B, T * 2, C))
-        x_up = x_up.at[:, ::2, :].add(x)
-
-        # Reshape for grouped conv1d: (B*C, T*2, 1)
-        x_up = x_up.transpose(0, 2, 1).reshape(B * C, T * 2, 1)
-
+        ratio = 2
         K = self.filter.shape[1]
-        pad = K // 2
-        left_edge = mx.repeat(x_up[:, :1, :], pad, axis=1)
-        right_edge = mx.repeat(x_up[:, -1:, :], pad - 1, axis=1)
-        x_up = mx.concatenate([left_edge, x_up, right_edge], axis=1)
+        pad = K // ratio - 1
+        pad_left = pad * ratio + (K - ratio) // 2
+        pad_right = pad * ratio + (K - ratio + 1) // 2
 
-        # Filter already in MLX (O=1, K, I=1) format
-        x_up = mx.conv1d(x_up, self.filter)
+        left_edge = mx.repeat(x[:, :1, :], pad, axis=1)
+        right_edge = mx.repeat(x[:, -1:, :], pad, axis=1)
+        x = mx.concatenate([left_edge, x, right_edge], axis=1)
 
-        T_out = x_up.shape[1]
-        return x_up.reshape(B, C, T_out).transpose(0, 2, 1) * 2.0
+        # Match PyTorch F.conv_transpose1d(..., groups=C) used by BigVGAN.
+        filt = mx.repeat(self.filter, C, axis=0)
+        x = mx.conv_transpose1d(x, filt, stride=ratio, groups=C) * ratio
+        return x[:, pad_left:-pad_right, :]
 
 
 class Activation1d(nn.Module):
