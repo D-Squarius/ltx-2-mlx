@@ -69,9 +69,10 @@ def _compute_decode_tiling(
     Returns None when the full video fits within budget — no tiling, no overhead.
 
     Budget is controlled by the ``LTX2_VAE_DECODE_BUDGET_GB`` environment variable
-    (default 8.0 GB). Raise it on Mac Studio 64/128 GB to reduce or eliminate tiling.
+    (default 2.0 GiB). The conservative default avoids a high-res Metal decode
+    path that can silently flatten long 1080p clips after the 121-frame region.
     """
-    peak_budget_gb = float(os.environ.get("LTX2_VAE_DECODE_BUDGET_GB", "8.0"))
+    peak_budget_gb = float(os.environ.get("LTX2_VAE_DECODE_BUDGET_GB", "2.0"))
     _, _, F_lat, H_lat, W_lat = latent_shape
     budget_bytes = int(peak_budget_gb * 1024**3)
 
