@@ -427,12 +427,9 @@ class VideoDecoder(nn.Module):
         """Decode latent and stream frames to ffmpeg.
 
         Automatically applies temporal tiling when the full-volume decode would
-        exceed the memory budget (``LTX2_VAE_DECODE_BUDGET_GB``, default 8 GB).
+        exceed the memory budget (``LTX2_VAE_DECODE_BUDGET_GB``, default 2 GiB).
         Budget is measured against the block-3 bf16 activation
-        (512 x 4 x 4H_lat x 4W_lat x 2 bytes per latent frame). At 8 GB:
-
-        - 720p  (H_lat=22, W_lat=40): ~55 MB/frame → tiling at ~47s @25fps
-        - 1080p (H_lat=33, W_lat=60): ~124 MB/frame → tiling at ~22s @25fps
+        (512 x 4 x 4H_lat x 4W_lat x 2 bytes per latent frame).
 
         Note: the budget covers the block-3 activation of a single tile decode.
         The tiling accumulation buffer (fp32, B x 3 x T x H x W) and its weights
