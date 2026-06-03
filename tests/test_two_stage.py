@@ -7,6 +7,23 @@ instantiation — all without requiring model weights.
 import mlx.core as mx
 
 from ltx_core_mlx.model.video_vae.video_vae import EncoderPerChannelStatistics, VideoEncoder
+from ltx_pipelines_mlx._base import BasePipeline
+
+
+def test_resolve_safetensors_prefers_latest_versioned_file(tmp_path):
+    (tmp_path / "transformer-distilled.safetensors").touch()
+    (tmp_path / "transformer-distilled-1.0.safetensors").touch()
+    latest = tmp_path / "transformer-distilled-1.1.safetensors"
+    latest.touch()
+
+    assert BasePipeline._resolve_safetensors(tmp_path, "transformer-distilled") == latest
+
+
+def test_resolve_safetensors_falls_back_to_unversioned_file(tmp_path):
+    fallback = tmp_path / "transformer-distilled.safetensors"
+    fallback.touch()
+
+    assert BasePipeline._resolve_safetensors(tmp_path, "transformer-distilled") == fallback
 
 
 # ---------------------------------------------------------------------------
