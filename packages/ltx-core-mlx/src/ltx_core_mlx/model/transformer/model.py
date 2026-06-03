@@ -131,6 +131,7 @@ class LTXModel(nn.Module):
             )
             for _ in range(config.num_layers)
         ]
+        self._rope_freqs_cache: dict[tuple, tuple[mx.array, mx.array, str]] = {}
 
     def _embed_timestep_scalar(
         self,
@@ -367,6 +368,8 @@ class LTXModel(nn.Module):
                 self.config.av_cross_num_heads,
                 self.config.av_cross_head_dim,
                 max_pos_override=[cross_pe_max_pos],
+                cache_owner=video_positions,
+                cache_suffix="video_cross",
             )
         if audio_positions is not None:
             audio_cross_rope_freqs = self._compute_rope_freqs(
@@ -374,6 +377,8 @@ class LTXModel(nn.Module):
                 self.config.av_cross_num_heads,
                 self.config.av_cross_head_dim,
                 max_pos_override=[cross_pe_max_pos],
+                cache_owner=audio_positions,
+                cache_suffix="audio_cross",
             )
 
         # --- Block stack (optionally overridden) ---
@@ -461,6 +466,8 @@ class LTXModel(nn.Module):
         num_heads: int,
         head_dim: int,
         max_pos_override: list[int] | None = None,
+        cache_owner: mx.array | None = None,
+        cache_suffix: str = "",
     ) -> mx.array:
         """Compute per-head RoPE frequencies using reference log-spaced grid.
 
@@ -480,7 +487,22 @@ class LTXModel(nn.Module):
             max_pos = max_pos_override
         else:
             max_pos = list(self.config.positional_embedding_max_pos[: positions.shape[-1]])
-        return precompute_rope_freqs(
+        owner = cache_owner if cache_owner is not None else positions
+        cache_key = (
+            id(owner),
+            cache_suffix,
+            tuple(positions.shape),
+            str(positions.dtype),
+            inner_dim,
+            num_heads,
+            tuple(max_pos),
+            self.config.rope_theta,
+            self.config.rope_type,
+        )
+        cached = self._rope_freqs_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        freqs = precompute_rope_freqs(
             positions,
             inner_dim=inner_dim,
             num_heads=num_heads,
@@ -488,6 +510,8 @@ class LTXModel(nn.Module):
             max_pos=max_pos,
             rope_type=self.config.rope_type,
         )
+        self._rope_freqs_cache[cache_key] = freqs
+        return freqs
 
 
 class X0Model(nn.Module):
